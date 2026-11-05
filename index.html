@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="es-MX">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Finanzas Arcade | Skill Crane</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts: Retro Arcade Font -->
+    <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+    
+    <!-- PWA CONFIGURATION -->
+    <link rel="manifest" href="./manifest.json">
+    <meta name="theme-color" content="#0f0f15">
+    <link rel="apple-touch-icon" href="./icon-192.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { arcade: ['VT323', 'monospace'], sans: ['Inter', 'sans-serif'] },
+                    colors: {
+                        arcade_bg: '#111827', // Gray 900
+                        neon_blue: '#00f3ff',
+                        neon_pink: '#ff00ea',
+                        neon_green: '#39ff14',
+                        arcade_red: '#ff2a2a'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { 
+            background-color: #0f0f15;
+            background-image: radial-gradient(circle at center, #1a1a2e 0%, #000000 100%);
+            color: white;
+            overflow: hidden; /* Evitar scroll para inmersión arcade */
+        }
+        
+        .arcade-cabinet {
+            border: 8px solid #333;
+            border-radius: 20px 20px 0 0;
+            box-shadow: inset 0 0 50px rgba(0,0,0,0.8), 0 0 20px rgba(0, 243, 255, 0.2);
+            background: linear-gradient(180deg, #111827 0%, #1f2937 100%);
+        }
+
+        .glass-reflection {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 40%);
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        /* La Garra - Sistema 2D */
+        #crane-gantry {
+            position: absolute;
+            width: 100%;
+            height: 12px;
+            background: linear-gradient(to bottom, #6b7280, #374151);
+            border-bottom: 3px solid #111827;
+            top: 50%; /* Variable Y */
+            transition: top 0.15s ease-out;
+            z-index: 20;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+        }
+
+        #crane-assembly {
+            position: absolute;
+            top: 0;
+            left: 50%; /* Variable X */
+            transform: translateX(-50%);
+            transition: left 0.15s ease-out;
+            z-index: 25;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .crane-wire {
+            width: 4px;
+            height: 40px; /* Cambia dinámicamente al caer */
+            background: linear-gradient(to right, #9ca3af, #d1d5db, #9ca3af);
+            transition: height 0.4s ease-in-out; /* Velocidad de caída acelerada de 0.8s a 0.4s */
+            box-shadow: inset 0 0 2px rgba(0,0,0,0.5);
+        }
+
+        .crane-claw {
+            font-size: 3.5rem;
+            color: #d1d5db;
+            text-shadow: 0 5px 15px rgba(0,0,0,0.5);
+            margin-top: -12px;
+            position: relative;
+        }
+
+        /* Premios / Categorías (Grid 2D) */
+        .prize-item {
+            transition: transform 0.2s, filter 0.2s;
+            filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.1));
+            position: absolute; 
+            transform: translate(-50%, -50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            z-index: 15;
+        }
+        .prize-item.targeted {
+            filter: drop-shadow(0 0 20px #00f3ff);
+            transform: translate(-50%, -50%) scale(1.3);
+            z-index: 30;
+        }
+
+        /* Botones del Tablero */
+        .arcade-btn {
+            background: radial-gradient(circle at 30% 30%, #ff4d4d, #b30000);
+            box-shadow: 0 8px 0 #660000, 0 15px 20px rgba(0,0,0,0.5);
+            transition: all 0.1s;
+        }
+        .arcade-btn:active, .arcade-btn.pressed {
+            transform: translateY(8px);
+            box-shadow: 0 0px 0 #660000, 0 5px 10px rgba(0,0,0,0.5);
+        }
+        
+        .joystick-btn {
+            background: radial-gradient(circle at 30% 30%, #4b5563, #1f2937);
+            box-shadow: 0 6px 0 #111827, 0 10px 15px rgba(0,0,0,0.5);
+        }
+        .joystick-btn:active {
+            transform: translateY(6px);
+            box-shadow: 0 0px 0 #111827;
+        }
+
+        /* Animaciones */
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+        .text-blink { animation: blink 1.5s infinite; }
+
+        @keyframes popAndFloat {
+            0% { transform: translateY(20px) scale(0.5); opacity: 0; }
+            20% { transform: translateY(0px) scale(1.5); opacity: 1; }
+            80% { transform: translateY(-15px) scale(1); opacity: 1; }
+            100% { transform: translateY(-30px) scale(0.8); opacity: 0; }
+        }
+        .coin-pop {
+            animation: popAndFloat 2s ease-out forwards;
+        }
+
+        /* --- [CHECKPOINT: UI FIXES] - Ajuste fluido de tamaños --- */
+        .prize-icon {
+            font-size: clamp(2rem, 5vw, 3.5rem);
+        }
+        .prize-label {
+            font-size: clamp(0.55rem, 1.5vw, 0.875rem);
+        }
+
+        .scanlines {
+            background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0) 50%, rgba(0,0,0,0.1) 50%, rgba(0,0,0,0.1));
+            background-size: 100% 4px;
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            pointer-events: none; z-index: 40;
+        }
+    </style>
+</head>
+<body class="h-screen flex flex-col items-center justify-center font-arcade selection:bg-neon_pink selection:text-white relative">
+
+    <!-- --- [CHECKPOINT: ONBOARDING PASO 1 - NOMBRE] --- -->
+    <div id="intro-name-screen" class="fixed inset-0 bg-slate-900 z-[110] flex items-center justify-center p-4">
+        <div class="scanlines"></div>
+        <div class="bg-black border-4 border-neon_blue p-8 rounded-xl max-w-lg w-full text-white shadow-[0_0_40px_rgba(0,243,255,0.4)] relative z-50">
+            <h1 class="text-neon_blue text-5xl text-center mb-2 tracking-widest text-shadow-glow text-blink">INSERT COIN</h1>
+            <h2 class="text-center text-xl text-slate-400 tracking-widest mb-8">PLAYER 1 START</h2>
+            
+            <form id="form-name" onsubmit="submitName(event)" class="space-y-6 font-sans text-center">
+                <div>
+                    <label class="block text-neon_green font-arcade text-3xl mb-4">¿CUÁL ES TU NOMBRE?</label>
+                    <input type="text" id="player-name" required placeholder="Ej. Mario, Ana..." autocomplete="off" class="w-full bg-slate-800 border-2 border-slate-600 rounded p-4 outline-none focus:border-neon_blue text-white font-arcade text-4xl text-center uppercase tracking-widest">
+                </div>
+                <div class="pt-4">
+                    <button type="submit" class="bg-neon_blue hover:bg-cyan-500 text-black font-arcade text-4xl py-4 px-12 rounded border-4 border-white shadow-[0_0_20px_rgba(0,243,255,0.8)] transition-transform hover:scale-105">NEXT ></button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- --- [CHECKPOINT: ONBOARDING PASO 2 - HOGAR] --- -->
+    <div id="intro-home-screen" class="hidden fixed inset-0 bg-slate-900 z-[100] flex items-center justify-center p-4 overflow-y-auto">
+        <div class="scanlines"></div>
+        <div class="bg-black border-4 border-neon_pink p-6 md:p-8 rounded-xl max-w-2xl w-full text-white shadow-[0_0_40px_rgba(255,0,234,0.4)] relative z-50 my-8">
+            <div class="text-center mb-4 border-b-2 border-slate-800 pb-4">
+                <h2 class="text-neon_green font-sans font-bold text-2xl uppercase tracking-widest"><i class="fa-solid fa-gamepad mr-2 text-neon_pink"></i>Mi Familia: Control Financiero</h2>
+            </div>
+            <h2 class="text-center text-xl text-neon_blue tracking-widest mb-6">WELCOME <span id="welcome-name" class="text-white"></span>! CONFIGURE YOUR BASE</h2>
+            
+            <form id="form-intro" onsubmit="submitHome(event)" class="space-y-4 md:space-y-6 font-sans">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-neon_green font-arcade text-2xl mb-1"><i class="fa-solid fa-users mr-2"></i>ADULTOS</label>
+                        <input type="number" id="hogar-adultos" min="1" value="2" required class="w-full bg-slate-800 border-2 border-slate-600 rounded p-2 outline-none focus:border-neon_green text-white font-bold">
+                    </div>
+                    <div>
+                        <label class="block text-neon_green font-arcade text-2xl mb-1"><i class="fa-solid fa-child mr-2"></i>MENORES</label>
+                        <input type="number" id="hogar-menores" min="0" value="0" required class="w-full bg-slate-800 border-2 border-slate-600 rounded p-2 outline-none focus:border-neon_green text-white font-bold">
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-neon_blue font-arcade text-2xl mb-1"><i class="fa-solid fa-briefcase mr-2"></i>TRABAJO</label>
+                        <select id="hogar-laboral" class="w-full bg-slate-800 border-2 border-slate-600 rounded p-2 outline-none focus:border-neon_blue text-white font-bold">
+                            <option value="Empleado">ASALARIADO</option>
+                            <option value="Emprendedor">EMPRENDEDOR</option>
+                            <option value="Mixto">MIXTO</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-neon_pink font-arcade text-2xl mb-1"><i class="fa-solid fa-house mr-2"></i>TIPO DE VIVIENDA</label>
+                        <select id="hogar-vivienda" class="w-full bg-slate-800 border-2 border-slate-600 rounded p-2 outline-none focus:border-neon_pink text-white font-bold">
+                            <option value="Rentada">RENTADA</option>
+                            <option value="Hipoteca">HIPOTECA</option>
+                            <option value="Propia">PROPIA</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-yellow-400 font-arcade text-2xl mb-1"><i class="fa-solid fa-dog mr-2"></i>MASCOTAS (COMPANIONS)</label>
+                    <input type="number" id="hogar-mascotas" min="0" value="0" required class="w-full bg-slate-800 border-2 border-slate-600 rounded p-2 outline-none focus:border-yellow-400 text-white font-bold">
+                </div>
+                <div class="pt-6 text-center">
+                    <button type="submit" class="bg-neon_pink hover:bg-pink-600 text-white font-arcade text-4xl py-4 px-12 rounded border-4 border-white shadow-[0_0_20px_rgba(255,0,234,0.8)] transition-transform hover:scale-105">NEXT ></button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- --- [CHECKPOINT: ONBOARDING PASO 3 - GLOSARIO] --- -->
+    <div id="modal-glosario" class="hidden fixed inset-0 bg-slate-900 bg-opacity-95 z-[95] flex items-center justify-center p-4 overflow-y-auto">
+        <div class="scanlines"></div>
+        <div class="bg-black border-4 border-neon_blue p-6 md:p-8 rounded-xl max-w-4xl w-full text-white shadow-[0_0_40px_rgba(0,243,255,0.4)] relative z-50 my-8">
+            <button onclick="cerrarGlosario()" class="absolute top-4 right-4 text-neon_blue hover:text-white text-3xl"><i class="fa-solid fa-xmark"></i></button>
+            <h2 class="text-neon_blue font-arcade text-4xl mb-2 text-center tracking-widest text-shadow-glow">GLOSARIO / TUTORIAL</h2>
+            <p class="text-slate-400 text-center font-sans mb-6">Mueve la garra hacia estas categorías para clasificar tus finanzas:</p>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 font-sans text-sm max-h-[50vh] overflow-y-auto pr-2">
+                <div class="bg-slate-900 p-3 border-l-4 border-neon_green rounded"><strong class="text-neon_green"><i class="fa-solid fa-industry mr-1"></i> TRABAJO (INGRESOS)</strong><br><span class="text-slate-400">Sueldo, honorarios, bonos, negocios.</span></div>
+                <div class="bg-slate-900 p-3 border-l-4 border-neon_blue rounded"><strong class="text-neon_blue"><i class="fa-solid fa-house mr-1"></i> VIVIENDA</strong><br><span class="text-slate-400">Renta, hipoteca, luz, agua, gas.</span></div>
+                <div class="bg-slate-900 p-3 border-l-4 border-yellow-400 rounded"><strong class="text-yellow-400"><i class="fa-solid fa-utensils mr-1"></i> ALIMENTACIÓN</strong><br><span class="text-slate-400">Despensa, garrafones, restaurantes.</span></div>
+                <div class="bg-slate-900 p-3 border-l-4 border-neon_pink rounded"><strong class="text-neon_pink"><i class="fa-solid fa-car-side mr-1"></i> TRANSPORTE</strong><br><span class="text-slate-400">Gasolina, camión, Uber, mecánicos.</span></div>
+                <div class="bg-slate-900 p-3 border-l-4 border-purple-400 rounded"><strong class="text-purple-400"><i class="fa-solid fa-wifi mr-1"></i> COMUNICACIONES</strong><br><span class="text-slate-400">Internet en casa, plan de celular.</span></div>
+                <div class="bg-slate-900 p-3 border-l-4 border-red-500 rounded"><strong class="text-red-500"><i class="fa-solid fa-heart-pulse mr-1"></i> SALUD</strong><br><span class="text-slate-400">Médico, medicinas, dentista.</span></div>
+                <div class="bg-slate-900 p-3 border-l-4 border-blue-400 rounded"><strong class="text-blue-400"><i class="fa-solid fa-graduation-cap mr-1"></i> EDUCACIÓN</strong><br><span class="text-slate-400">Colegiaturas, cursos, útiles.</span></div>
+                <div class="bg-slate-900 p-3 border-l-4 border-orange-400 rounded"><strong class="text-orange-400"><i class="fa-solid fa-tv mr-1"></i> ENTRETENIMIENTO</strong><br><span class="text-slate-400">Netflix, Spotify, cine, salidas.</span></div>
+                <div class="bg-slate-900 p-3 border-l-4 border-emerald-400 rounded"><strong class="text-emerald-400"><i class="fa-solid fa-piggy-bank mr-1"></i> AHORRO & SEGUROS</strong><br><span class="text-slate-400">Inversiones, seguro auto/vida, tandas.</span></div>
+                <div class="bg-slate-900 p-3 border-l-4 border-yellow-600 rounded"><strong class="text-yellow-600"><i class="fa-solid fa-dog mr-1"></i> MASCOTAS</strong><br><span class="text-slate-400">Alimento, veterinario, accesorios.</span></div>
+                <div class="bg-slate-900 p-3 border-l-4 border-slate-400 rounded md:col-span-2"><strong class="text-slate-400"><i class="fa-solid fa-box-open mr-1"></i> OTROS</strong><br><span class="text-slate-400">Cualquier gasto que no encaje.</span></div>
+            </div>
+            <div class="pt-8 text-center" id="btn-glosario-start">
+                <button onclick="startGame()" class="bg-neon_blue hover:bg-cyan-500 text-black font-arcade text-4xl py-3 px-12 rounded border-4 border-white shadow-[0_0_20px_rgba(0,243,255,0.8)] transition-transform hover:scale-105">PRESS START</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scoreboard SUPERIOR (Animaciones reubicadas aquí) -->
+    <div class="w-full max-w-4xl px-4 py-2 flex justify-between items-end mb-2 relative z-[100]">
+        <button onclick="toggleMute()" class="absolute top-2 right-4 text-slate-500 hover:text-white text-2xl z-50 focus:outline-none transition-colors" title="Mute/Unmute">
+            <i id="mute-icon" class="fa-solid fa-volume-high"></i>
+        </button>
+        
+        <!-- Score Ingresos + Animación -->
+        <div class="relative w-1/3">
+            <div class="text-neon_green text-xl md:text-2xl tracking-widest text-shadow-glow truncate">1UP <span id="player-name-display" class="text-white">P1</span><br><span id="score-ingresos">$0.00</span></div>
+            <div class="absolute top-0 w-full text-left pointer-events-none drop-shadow-2xl">
+                <div id="coin-popup-ingreso" class="inline-block opacity-0 text-2xl md:text-4xl font-arcade font-bold tracking-widest whitespace-nowrap text-neon_green">
+                    <i class="fa-solid fa-coins text-yellow-400"></i> + $
+                </div>
+            </div>
+        </div>
+
+        <!-- Score Central -->
+        <div class="w-1/3 text-neon_blue text-3xl md:text-5xl tracking-widest font-bold text-center text-blink">SCORE<br><span id="score-balance">$0.00</span></div>
+        
+        <!-- Score Gastos + Animación -->
+        <div class="relative w-1/3 text-right">
+            <div class="text-neon_pink text-xl md:text-2xl tracking-widest truncate">DAMAGE<br><span id="score-gastos">$0.00</span></div>
+            <div class="absolute top-0 w-full text-right pointer-events-none drop-shadow-2xl">
+                <div id="coin-popup-gasto" class="inline-block opacity-0 text-2xl md:text-4xl font-arcade font-bold tracking-widest whitespace-nowrap text-arcade_red">
+                    <i class="fa-solid fa-coins text-yellow-400"></i> - $
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MÁQUINA ARCADE (Contenedor Principal) -->
+    <div class="relative w-full max-w-4xl h-[55vh] min-h-[350px] arcade-cabinet overflow-hidden mx-4 flex flex-col justify-end perspective-1000">
+        <div class="glass-reflection"></div>
+        
+        <div class="absolute top-4 w-full text-center text-slate-700 text-3xl opacity-30 z-0">FINANCE CRANE V1.2</div>
+
+        <!-- Riel Frontal/Trasero (Eje Y) -->
+        <div id="crane-gantry">
+            <!-- Ensamblaje de la Garra (Eje X) -->
+            <div id="crane-assembly">
+                <div class="w-16 h-8 bg-slate-700 border-2 border-slate-500 rounded flex justify-center z-30 relative">
+                    <div class="w-2 h-full bg-slate-900"></div>
+                </div>
+                <div id="crane-wire" class="crane-wire"></div>
+                <i class="fa-solid fa-hand-holding crane-claw" id="claw-icon"></i>
+            </div>
+        </div>
+
+        <!-- Escenario 2D y Categorías (Premios - 11 Posiciones en Cuadrícula Ajustada para Responsividad) -->
+        <!-- Filas Y: 25% (Fondo), 55% (Medio), 80% (Frente) para evitar desbordes inferiores -->
+        <div class="absolute inset-0 w-full h-full pointer-events-none" id="prize-container">
+            
+            <!-- FILA 1 (Fondo) - Y: 25% -->
+            <div class="prize-item text-neon_green" style="left: 20%; top: 25%;" id="prize-trabajo" data-cat="Trabajo">
+                <i class="fa-solid fa-industry prize-icon mb-1"></i>
+                <span class="prize-label font-sans font-bold tracking-wider bg-slate-900/80 px-1 rounded">INGRESO</span>
+            </div>
+            <div class="prize-item text-neon_blue" style="left: 50%; top: 25%;" id="prize-casa" data-cat="Casa">
+                <i class="fa-solid fa-house prize-icon mb-1"></i>
+                <span class="prize-label font-sans font-bold tracking-wider bg-slate-900/80 px-1 rounded">VIVIENDA</span>
+            </div>
+            <div class="prize-item text-yellow-400" style="left: 80%; top: 25%;" id="prize-comida" data-cat="Comida">
+                <i class="fa-solid fa-utensils prize-icon mb-1"></i>
+                <span class="prize-label font-sans font-bold tracking-wider bg-slate-900/80 px-1 rounded">COMIDA</span>
+            </div>
+
+            <!-- FILA 2 (Medio) - Y: 55% -->
+            <!-- Ajuste en X: 15%, 38%, 62%, 85% para mantenerlos dentro de los márgenes en pantallas chicas -->
+            <div class="prize-item text-neon_pink" style="left: 15%; top: 55%;" id="prize-transporte" data-cat="Transporte">
+                <i class="fa-solid fa-car-side prize-icon mb-1"></i>
+                <span class="prize-label font-sans font-bold tracking-wider bg-slate-900/80 px-1 rounded">TRANSP.</span>
+            </div>
+            <div class="prize-item text-purple-400" style="left: 38%; top: 55%;" id="prize-comunicaciones" data-cat="Comunicaciones">
+                <i class="fa-solid fa-wifi prize-icon mb-1"></i>
+                <span class="prize-label font-sans font-bold tracking-wider bg-slate-900/80 px-1 rounded">INTERNET</span>
+            </div>
+            <div class="prize-item text-red-500" style="left: 62%; top: 55%;" id="prize-salud" data-cat="Salud">
+                <i class="fa-solid fa-heart-pulse prize-icon mb-1"></i>
+                <span class="prize-label font-sans font-bold tracking-wider bg-slate-900/80 px-1 rounded">SALUD</span>
+            </div>
+            <div class="prize-item text-blue-400" style="left: 85%; top: 55%;" id="prize-educacion" data-cat="Educacion">
+                <i class="fa-solid fa-graduation-cap prize-icon mb-1"></i>
+                <span class="prize-label font-sans font-bold tracking-wider bg-slate-900/80 px-1 rounded">ESCUELA</span>
+            </div>
+
+            <!-- FILA 3 (Frente) - Y: 80% (Evita el corte en la base) -->
+            <div class="prize-item text-orange-400" style="left: 15%; top: 80%;" id="prize-ocio" data-cat="Ocio">
+                <i class="fa-solid fa-tv prize-icon mb-1"></i>
+                <span class="prize-label font-sans font-bold tracking-wider bg-slate-900/80 px-1 rounded">OCIO</span>
+            </div>
+            <div class="prize-item text-emerald-400" style="left: 38%; top: 80%;" id="prize-ahorro" data-cat="Ahorro">
+                <i class="fa-solid fa-piggy-bank prize-icon mb-1"></i>
+                <span class="prize-label font-sans font-bold tracking-wider bg-slate-900/80 px-1 rounded">AHORRO</span>
+            </div>
+            <div class="prize-item text-yellow-600" style="left: 62%; top: 80%;" id="prize-mascotas" data-cat="Mascotas">
+                <i class="fa-solid fa-dog prize-icon mb-1"></i>
+                <span class="prize-label font-sans font-bold tracking-wider bg-slate-900/80 px-1 rounded">MASCOTA</span>
+            </div>
+            <div class="prize-item text-slate-400" style="left: 85%; top: 80%;" id="prize-otros" data-cat="Otros">
+                <i class="fa-solid fa-box-open prize-icon mb-1"></i>
+                <span class="prize-label font-sans font-bold tracking-wider bg-slate-900/80 px-1 rounded">OTROS</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- PANEL DE CONTROL -->
+    <div class="w-full max-w-4xl mt-4 md:mt-8 px-4 md:px-8 flex justify-between items-center bg-slate-900 p-4 md:p-6 rounded-b-3xl border-x-8 border-b-8 border-slate-800">
+        
+        <!-- Joystick D-PAD (2 Ejes) -->
+        <div class="flex flex-col items-center gap-1 md:gap-2">
+            <button onclick="moveClaw(0, -15)" class="joystick-btn w-10 h-10 md:w-14 md:h-14 rounded-full text-white text-lg md:text-xl flex items-center justify-center outline-none">
+                <i class="fa-solid fa-arrow-up"></i>
+            </button>
+            <div class="flex gap-1 md:gap-2">
+                <button onclick="moveClaw(-15, 0)" class="joystick-btn w-10 h-10 md:w-14 md:h-14 rounded-full text-white text-lg md:text-xl flex items-center justify-center outline-none">
+                    <i class="fa-solid fa-arrow-left"></i>
+                </button>
+                <div class="w-10 h-10 md:w-14 md:h-14 rounded-full bg-slate-900 border-4 border-slate-700 shadow-inner flex items-center justify-center">
+                    <div class="w-3 h-3 bg-slate-600 rounded-full"></div>
+                </div>
+                <button onclick="moveClaw(15, 0)" class="joystick-btn w-10 h-10 md:w-14 md:h-14 rounded-full text-white text-lg md:text-xl flex items-center justify-center outline-none">
+                    <i class="fa-solid fa-arrow-right"></i>
+                </button>
+            </div>
+            <button onclick="moveClaw(0, 15)" class="joystick-btn w-10 h-10 md:w-14 md:h-14 rounded-full text-white text-lg md:text-xl flex items-center justify-center outline-none">
+                <i class="fa-solid fa-arrow-down"></i>
+            </button>
+        </div>
+
+        <!-- Botonera Central -->
+        <div class="flex flex-col md:flex-row gap-2 md:gap-4 px-2">
+            <button onclick="abrirGlosarioSolo()" class="bg-slate-800 hover:bg-slate-700 border-2 border-slate-600 rounded px-3 py-2 text-neon_blue font-arcade tracking-widest text-lg shadow-[0_4px_0_#334155] active:translate-y-1 active:shadow-none transition-all">
+                <i class="fa-solid fa-book mr-1"></i> GLOSARIO
+            </button>
+            <button onclick="abrirDashboard()" class="bg-slate-800 hover:bg-slate-700 border-2 border-neon_pink rounded px-3 py-2 text-neon_pink font-arcade tracking-widest text-lg shadow-[0_4px_0_#831843] active:translate-y-1 active:shadow-none transition-all">
+                <i class="fa-solid fa-chart-pie mr-1"></i> DASHBOARD
+            </button>
+            <button onclick="document.getElementById('modal-banco').classList.remove('hidden')" class="bg-slate-800 hover:bg-slate-700 border-2 border-neon_green rounded px-3 py-2 text-neon_green font-arcade tracking-widest text-lg shadow-[0_4px_0_#14532d] active:translate-y-1 active:shadow-none transition-all">
+                <i class="fa-solid fa-building-columns mr-1"></i> BANCO
+            </button>
+        </div>
+
+        <div class="flex gap-4 items-center pl-2 border-l-4 border-slate-800">
+            <!-- Botón de Acción Principal -->
+            <button onclick="dropClaw()" id="btn-drop" class="arcade-btn w-20 h-20 md:w-24 md:h-24 rounded-full text-white text-xl md:text-2xl font-bold border-4 border-red-900 outline-none flex items-center justify-center">
+                GRAB
+            </button>
+        </div>
+    </div>
+
+    <!-- MODAL: REGISTRO FINANCIERO -->
+    <div id="modal-registro" class="hidden fixed inset-0 bg-black bg-opacity-80 z-[70] flex items-center justify-center p-4">
+        <div class="bg-arcade_bg border-4 border-neon_blue rounded-xl p-6 max-w-md w-full text-white font-sans relative shadow-[0_0_30px_rgba(0,243,255,0.3)]">
+            <div id="modal-titulo-registro" class="absolute -top-4 left-1/2 transform -translate-x-1/2 bg-neon_blue text-black font-arcade px-4 py-1 text-2xl tracking-widest rounded">
+                NUEVO REGISTRO
+            </div>
+            <div class="mt-4 flex items-center gap-4 border-b border-slate-700 pb-4 mb-4">
+                <div id="modal-icon" class="text-4xl text-neon_blue"><i class="fa-solid fa-box"></i></div>
+                <div>
+                    <p class="text-slate-400 text-xs font-bold uppercase tracking-wider">Categoría</p>
+                    <h3 id="modal-categoria" class="font-arcade text-3xl tracking-widest">CATEGORIA</h3>
+                </div>
+            </div>
+            <form id="form-registro" onsubmit="guardarRegistro(event)" class="space-y-4">
+                <input type="hidden" id="reg-id">
+                <input type="hidden" id="reg-tipo">
+                
+                <div>
+                    <label class="block text-sm font-medium text-slate-400 mb-1">Concepto Específico</label>
+                    <select id="reg-concepto" required class="w-full bg-slate-800 border border-slate-600 rounded p-2.5 outline-none focus:border-neon_blue text-white font-bold">
+                    </select>
+                </div>
+                
+                <div id="arcade-payment-section" class="hidden space-y-4 pt-2 border-t border-slate-700">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-400 mb-1">Método de Pago</label>
+                        <select id="reg-metodo-pago" required class="w-full bg-slate-800 border border-slate-600 rounded p-2.5 outline-none focus:border-neon_pink text-white font-bold">
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-400 mb-1">Monto (MXN)</label>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">$</div>
+                        <input type="number" id="reg-monto" step="0.01" min="0.01" required class="w-full bg-slate-800 border border-slate-600 rounded py-2.5 pl-7 pr-3 outline-none focus:border-neon_blue text-white font-arcade text-2xl" placeholder="0.00">
+                    </div>
+                </div>
+
+                <div class="pt-4 flex gap-3">
+                    <button type="button" onclick="cerrarModal()" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded transition-colors font-arcade text-xl">CANCELAR</button>
+                    <button type="submit" class="flex-1 bg-neon_blue hover:bg-cyan-400 text-black font-bold py-3 rounded transition-colors font-arcade text-xl">GUARDAR</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: BANCO / TARJETAS -->
+    <!-- (El código de los modales de Banco y Dashboard se mantiene idéntico, se omiten cambios mayores aquí para mantener estructura) -->
+    <div id="modal-banco" class="hidden fixed inset-0 bg-black bg-opacity-80 z-[60] flex items-center justify-center p-4">
+        <div class="bg-slate-900 border-4 border-neon_green rounded-xl p-6 max-w-md w-full text-white font-sans relative shadow-[0_0_30px_rgba(57,255,20,0.3)]">
+            <div class="absolute -top-4 left-1/2 transform -translate-x-1/2 bg-neon_green text-black font-arcade px-4 py-1 text-2xl tracking-widest rounded">BANK & CARDS</div>
+            <div class="mt-4 mb-4">
+                <p class="text-slate-400 text-sm mb-4">Registra tus tarjetas para usarlas al atrapar gastos.</p>
+                <form id="form-tarjeta" onsubmit="agregarTarjetaArcade(event)" class="flex flex-col sm:flex-row gap-2">
+                    <input type="hidden" id="arcade-tarjeta-id">
+                    <input type="text" id="nueva-tarjeta-nombre" required placeholder="Nombre (Ej. Nu, Banamex)" class="flex-1 bg-slate-800 border border-slate-600 rounded p-2 text-white outline-none focus:border-neon_green">
+                    <select id="nueva-tarjeta-tipo" class="bg-slate-800 border border-slate-600 rounded p-2 text-white outline-none focus:border-neon_green">
+                        <option value="Credito">Crédito (TDC)</option>
+                        <option value="Debito">Débito (TDD)</option>
+                    </select>
+                    <button type="submit" id="btn-submit-tarjeta-arcade" class="bg-neon_green text-black font-arcade text-xl px-4 py-2 rounded hover:bg-green-400 transition-colors">ADD</button>
+                </form>
+            </div>
+            <div class="border-t border-slate-700 pt-4">
+                <h4 class="font-arcade text-xl tracking-widest text-neon_blue mb-2">TUS TARJETAS:</h4>
+                <ul id="lista-tarjetas-arcade" class="space-y-2 max-h-40 overflow-y-auto">
+                    <li class="text-slate-500 text-sm">No hay tarjetas registradas.</li>
+                </ul>
+            </div>
+            <div class="pt-6 text-center">
+                <button type="button" onclick="document.getElementById('modal-banco').classList.add('hidden')" class="bg-slate-700 hover:bg-slate-600 text-white font-arcade text-xl py-2 px-8 rounded">CLOSE</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: DASHBOARD -->
+    <div id="modal-dashboard" class="hidden fixed inset-0 bg-black bg-opacity-90 z-[65] flex items-center justify-center p-4 overflow-y-auto">
+        <div class="bg-arcade_bg border-4 border-neon_pink rounded-xl p-6 max-w-4xl w-full text-white font-sans relative shadow-[0_0_40px_rgba(255,0,234,0.3)] my-8">
+            <div class="absolute -top-4 left-1/2 transform -translate-x-1/2 bg-neon_pink text-black font-arcade px-6 py-1 text-3xl tracking-widest rounded flex items-center gap-2"><i class="fa-solid fa-ranking-star"></i> PLAYER STATS</div>
+            <button onclick="document.getElementById('modal-dashboard').classList.add('hidden')" class="absolute top-4 right-4 text-slate-400 hover:text-white text-2xl"><i class="fa-solid fa-xmark"></i></button>
+            <div class="text-center mt-6 mb-6"><p id="dashboard-fecha" class="text-neon_green font-arcade text-2xl tracking-widest"></p></div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                <div class="bg-slate-900 border-2 border-slate-700 rounded-lg p-4 relative">
+                    <h4 class="font-arcade text-xl text-slate-300 tracking-widest mb-2 text-center">VS MATCH</h4>
+                    <div class="relative h-48 w-full"><canvas id="arcade-chart-vs"></canvas></div>
+                </div>
+                <div class="bg-slate-900 border-2 border-slate-700 rounded-lg p-4 relative">
+                    <h4 class="font-arcade text-xl text-slate-300 tracking-widest mb-2 text-center">WEEK PROGRESS</h4>
+                    <div class="relative h-48 w-full"><canvas id="arcade-chart-days"></canvas></div>
+                </div>
+            </div>
+            <div>
+                <h4 class="font-arcade text-2xl text-neon_blue tracking-widest mb-4 border-b-2 border-slate-700 pb-2"><i class="fa-solid fa-list-ul mr-2"></i>RECENT LOGS</h4>
+                <div class="bg-slate-900 rounded-lg border-2 border-slate-700 overflow-hidden">
+                    <div class="max-h-60 overflow-y-auto p-2" id="lista-registros"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        // --- MOTOR DE AUDIO RETRO ---
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        let isMuted = false;
+        let bgmInterval = null;
+
+        function playBGM() {
+            if(isMuted) return;
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            clearInterval(bgmInterval);
+            // Escala pentatónica y relajante con onda senoidal suave y ritmo más pausado
+            const notes = [261.63, 293.66, 329.63, 392.00, 440.00, 392.00, 329.63, 293.66]; 
+            let step = 0;
+            bgmInterval = setInterval(() => {
+                if(isMuted) return;
+                playTone(notes[step % notes.length], 'sine', 0.8, 0.015);
+                step++;
+            }, 800);
+        }
+
+        function stopBGM() { clearInterval(bgmInterval); }
+
+        function toggleMute() {
+            isMuted = !isMuted;
+            const icon = document.getElementById('mute-icon');
+            if(isMuted) {
+                icon.classList.remove('fa-volume-high'); icon.classList.add('fa-volume-xmark');
+                stopBGM();
+            } else {
+                icon.classList.remove('fa-volume-xmark'); icon.classList.add('fa-volume-high');
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                playBGM();
+            }
+        }
+
+        function playTone(freq, type, duration, vol=0.1, slideFreq=null) {
+            if(isMuted) return;
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = type; osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            if(slideFreq) osc.frequency.exponentialRampToValueAtTime(slideFreq, audioCtx.currentTime + duration);
+            gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+            osc.start(); osc.stop(audioCtx.currentTime + duration);
+        }
+
+        const sfx = {
+            coin: () => { playTone(987.77, 'square', 0.1, 0.1); setTimeout(()=>playTone(1318.51, 'square', 0.3, 0.1), 100); },
+            move: () => { playTone(440, 'triangle', 0.05, 0.05); },
+            drop: () => { playTone(600, 'sawtooth', 0.4, 0.1, 100); }, // Ajustado a 0.4s
+            grab: () => { playTone(300, 'square', 0.1, 0.1); setTimeout(()=>playTone(400, 'square', 0.2, 0.1), 100); },
+            save: () => { playTone(523.25, 'square', 0.1, 0.1); setTimeout(()=>playTone(659.25, 'square', 0.1, 0.1), 100); setTimeout(()=>playTone(783.99, 'square', 0.2, 0.1), 200); },
+            cash: () => { playTone(1000, 'square', 0.1, 0.1); setTimeout(() => playTone(1500, 'square', 0.1, 0.1), 50); setTimeout(() => playTone(2000, 'sine', 0.4, 0.15), 100); }
+        };
+
+        // --- ESTADO DEL JUEGO ---
+        // --- [CHECKPOINT: AUDITORÍA Y TESTING] ---
+        // Cambia DEV_MODE a "true" para saltar el proceso de Onboarding automáticamente
+        const DEV_MODE = false; 
+
+        let gameData = { ingresos: [], gastos: [], tarjetas: [], hogar: {}, playerName: 'P1' };
+        let isGrabbing = false;
+        let formateador = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
+
+        const categoriasGastos = {
+            'Vivienda': ['Renta / Hipoteca', 'Luz (Electricidad)', 'Agua', 'Gas (Estacionario/Cilindro)', 'Mantenimiento'],
+            'Alimentación': ['Supermercado / Despensa', 'Agua potable / Garrafones', 'Restaurantes / Comida Fuera'],
+            'Transporte': ['Gasolina', 'Transporte Público', 'Mantenimiento de Vehículo', 'Plataformas (Uber/Didi)'],
+            'Comunicaciones': ['Internet / Teléfono Fijo', 'Telefonía Móvil (Planes/Recargas)'],
+            'Salud': ['Médico / Consultas', 'Farmacia / Medicinas', 'Dentista'],
+            'Educación': ['Colegiatura', 'Inscripción', 'Cursos / Talleres', 'Material Escolar'],
+            'Entretenimiento & Tech': ['Streaming (Netflix, Spotify, etc.)', 'Software / Suscripciones', 'Salidas / Ocio', 'Cine / Videojuegos'],
+            'Ahorro, Inversión & Seguros': ['Ahorro Fijo', 'Inversiones', 'Seguro de Vida', 'Seguro de Gastos Médicos', 'Seguro de Auto', 'Tanda'],
+            'Mascotas': ['Alimento para Mascota', 'Veterinario', 'Accesorios / Limpieza'],
+            'Otros': ['Otro Gasto']
+        };
+
+        // Cuadrícula 2D de Premios (X, Y) - Coordenadas actualizadas para responsividad
+        const prizes = [
+            { id: 'prize-trabajo', name: 'Ingresos', type: 'ingreso', dashCat: 'Ingresos', posX: 20, posY: 25, icon: 'fa-industry', color: 'text-neon_green' },
+            { id: 'prize-casa', name: 'Vivienda', type: 'gasto', dashCat: 'Vivienda', posX: 50, posY: 25, icon: 'fa-house', color: 'text-neon_blue' },
+            { id: 'prize-comida', name: 'Alimentación', type: 'gasto', dashCat: 'Alimentación', posX: 80, posY: 25, icon: 'fa-utensils', color: 'text-yellow-400' },
+            
+            { id: 'prize-transporte', name: 'Transporte', type: 'gasto', dashCat: 'Transporte', posX: 15, posY: 55, icon: 'fa-car-side', color: 'text-neon_pink' },
+            { id: 'prize-comunicaciones', name: 'Comunicaciones', type: 'gasto', dashCat: 'Comunicaciones', posX: 38, posY: 55, icon: 'fa-wifi', color: 'text-purple-400' },
+            { id: 'prize-salud', name: 'Salud', type: 'gasto', dashCat: 'Salud', posX: 62, posY: 55, icon: 'fa-heart-pulse', color: 'text-red-500' },
+            { id: 'prize-educacion', name: 'Educación', type: 'gasto', dashCat: 'Educación', posX: 85, posY: 55, icon: 'fa-graduation-cap', color: 'text-blue-400' },
+            
+            { id: 'prize-ocio', name: 'Entretenimiento', type: 'gasto', dashCat: 'Entretenimiento & Tech', posX: 15, posY: 80, icon: 'fa-tv', color: 'text-orange-400' },
+            { id: 'prize-ahorro', name: 'Ahorro & Seguros', type: 'gasto', dashCat: 'Ahorro, Inversión & Seguros', posX: 38, posY: 80, icon: 'fa-piggy-bank', color: 'text-emerald-400' },
+            { id: 'prize-mascotas', name: 'Mascotas', type: 'gasto', dashCat: 'Mascotas', posX: 62, posY: 80, icon: 'fa-dog', color: 'text-yellow-600' },
+            { id: 'prize-otros', name: 'Otros', type: 'gasto', dashCat: 'Otros', posX: 85, posY: 80, icon: 'fa-box-open', color: 'text-slate-400' }
+        ];
+
+        let clawX = 50; 
+        let clawY = 55; 
+
+        // --- LÓGICA DE LA MÁQUINA 2D ---
+
+        function moveClaw(dx, dy) {
+            if(isGrabbing) return;
+            sfx.move(); 
+            
+            clawX += dx;
+            clawY += dy;
+            
+            // Límites (0% a 100% en X, 10% a 90% en Y)
+            if(clawX < 5) clawX = 5;
+            if(clawX > 95) clawX = 95;
+            if(clawY < 20) clawY = 20;
+            if(clawY > 100) clawY = 100;
+
+            document.getElementById('crane-assembly').style.left = `${clawX}%`;
+            document.getElementById('crane-gantry').style.top = `${clawY}%`;
+
+            highlightClosest();
+        }
+
+        function highlightClosest() {
+            let closestPrize = null;
+            let minDistance = Infinity;
+
+            prizes.forEach(prize => {
+                const el = document.getElementById(prize.id);
+                if(!el) return;
+                
+                // Pitágoras simple para encontrar la categoría más cercana en el plano 2D
+                const dx = clawX - prize.posX;
+                const dy = clawY - prize.posY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                el.classList.remove('targeted');
+                
+                if(distance < minDistance) {
+                    minDistance = distance;
+                    closestPrize = prize;
+                }
+            });
+
+            // Si estamos lo suficientemente cerca, iluminamos la categoría
+            if(closestPrize && minDistance < 15) {
+                document.getElementById(closestPrize.id).classList.add('targeted');
+            }
+        }
+
+        function dropClaw() {
+            if(isGrabbing) return;
+            isGrabbing = true;
+            sfx.drop();
+
+            const clawWire = document.getElementById('crane-wire');
+            const targetEl = document.querySelector('.prize-item.targeted');
+            
+            // Bajar la garra
+            clawWire.style.height = '120px';
+            
+            setTimeout(() => {
+                sfx.grab();
+                // Subir la garra
+                clawWire.style.height = '40px';
+                
+                setTimeout(() => {
+                    isGrabbing = false;
+                    if(targetEl) {
+                        const catId = targetEl.id;
+                        const prize = prizes.find(p => p.id === catId);
+                        if(prize) {
+                            abrirModal(prize);
+                        }
+                    }
+                }, 400); // Reducido de 800ms a 400ms
+            }, 400); // Reducido de 800ms a 400ms
+        }
+
+        // --- ANIMACIÓN DE MONEDA POPUP REUBICADA ---
+        function showCoinAnimation(tipo) {
+            let popup;
+            if(tipo === 'ingreso') {
+                popup = document.getElementById('coin-popup-ingreso');
+            } else {
+                popup = document.getElementById('coin-popup-gasto');
+            }
+            
+            // Reiniciar animación
+            popup.classList.remove('coin-pop');
+            void popup.offsetWidth; // Trigger reflow
+            popup.classList.add('coin-pop');
+        }
+
+        // --- LÓGICA DE ONBOARDING Y FLUJO ---
+        
+        function submitName(e) {
+            e.preventDefault();
+            const inputName = document.getElementById('player-name').value.trim();
+            gameData.playerName = inputName ? inputName.toUpperCase() : 'P1';
+            
+            // Actualizar visualmente
+            document.getElementById('player-name-display').innerText = gameData.playerName.substring(0, 8);
+            document.getElementById('welcome-name').innerText = gameData.playerName;
+            
+            // Transición a la siguiente pantalla
+            document.getElementById('intro-name-screen').classList.add('hidden');
+            document.getElementById('intro-home-screen').classList.remove('hidden');
+            sfx.coin();
+        }
+
+        function submitHome(e) {
+            e.preventDefault();
+            sfx.coin(); 
+            gameData.hogar = {
+                adultos: parseInt(document.getElementById('hogar-adultos').value),
+                menores: parseInt(document.getElementById('hogar-menores').value),
+                mascotas: parseInt(document.getElementById('hogar-mascotas').value),
+                vivienda: document.getElementById('hogar-vivienda').value,
+                laboral: document.getElementById('hogar-laboral').value
+            };
+            document.getElementById('intro-home-screen').classList.add('hidden');
+            document.getElementById('modal-glosario').classList.remove('hidden');
+            document.getElementById('btn-glosario-start').classList.remove('hidden');
+        }
+
+        function startGame() { 
+            cerrarGlosario(); 
+            playBGM(); 
+        }
+
+        function cerrarGlosario() { document.getElementById('modal-glosario').classList.add('hidden'); }
+        function abrirGlosarioSolo() { document.getElementById('btn-glosario-start').classList.add('hidden'); document.getElementById('modal-glosario').classList.remove('hidden'); }
+
+        function abrirModal(prize) {
+            document.getElementById('reg-id').value = ''; 
+            document.getElementById('modal-titulo-registro').innerText = 'NUEVO REGISTRO';
+            document.getElementById('modal-categoria').innerText = prize.name;
+            document.getElementById('modal-categoria').className = `font-arcade text-3xl tracking-widest ${prize.color}`;
+            document.getElementById('modal-icon').innerHTML = `<i class="fa-solid ${prize.icon}"></i>`;
+            document.getElementById('modal-icon').className = `text-4xl ${prize.color}`;
+            document.getElementById('reg-tipo').value = prize.type; 
+            
+            const selConcepto = document.getElementById('reg-concepto');
+            const selMetodoPago = document.getElementById('reg-metodo-pago'); 
+            selConcepto.innerHTML = '';
+            
+            if (prize.type === 'gasto') {
+                const conceptos = categoriasGastos[prize.dashCat] || ['Otro'];
+                conceptos.forEach(c => selConcepto.add(new Option(c, c)));
+                document.getElementById('arcade-payment-section').classList.remove('hidden');
+                selMetodoPago.required = true;
+                actualizarSelectoresPago();
+            } else {
+                const ingresosOpts = ['Sueldo / Quincena', 'Honorarios', 'Negocio', 'Bono / Prima', 'Otro Ingreso'];
+                ingresosOpts.forEach(c => selConcepto.add(new Option(c, c)));
+                document.getElementById('arcade-payment-section').classList.add('hidden');
+                selMetodoPago.required = false;
+            }
+            document.getElementById('modal-registro').classList.remove('hidden');
+            document.getElementById('reg-monto').focus();
+        }
+
+        function actualizarSelectoresPago() {
+            const select = document.getElementById('reg-metodo-pago');
+            select.innerHTML = '<option value="efectivo">Efectivo / Transferencia</option>';
+            const tdd = gameData.tarjetas.filter(t => t.tipo === 'Debito');
+            if(tdd.length > 0) {
+                const grp = document.createElement('optgroup'); grp.label = 'Tarjetas de Débito (TDD)';
+                tdd.forEach(t => grp.appendChild(new Option(t.nombre, 'tdd_'+t.nombre)));
+                select.appendChild(grp);
+            }
+            const tdc = gameData.tarjetas.filter(t => t.tipo === 'Credito');
+            if(tdc.length > 0) {
+                const grp2 = document.createElement('optgroup'); grp2.label = 'Tarjetas de Crédito (TDC)';
+                tdc.forEach(t => grp2.appendChild(new Option(t.nombre, 'tdc_'+t.nombre)));
+                select.appendChild(grp2);
+            }
+        }
+
+        function agregarTarjetaArcade(e) {
+            e.preventDefault();
+            const idInput = document.getElementById('arcade-tarjeta-id').value;
+            const nombre = document.getElementById('nueva-tarjeta-nombre').value;
+            const tipo = document.getElementById('nueva-tarjeta-tipo').value;
+            
+            if(idInput) {
+                const idx = gameData.tarjetas.findIndex(t => t.id == idInput);
+                if(idx > -1) gameData.tarjetas[idx] = { ...gameData.tarjetas[idx], nombre, tipo };
+            } else {
+                gameData.tarjetas.push({ id: Date.now(), nombre, tipo });
+            }
+            
+            document.getElementById('form-tarjeta').reset();
+            document.getElementById('arcade-tarjeta-id').value = '';
+            document.getElementById('btn-submit-tarjeta-arcade').innerText = 'ADD';
+            actualizarListaTarjetas();
+        }
+
+        function editarTarjetaArcade(id) {
+            const t = gameData.tarjetas.find(x => x.id === id);
+            if(!t) return;
+            document.getElementById('arcade-tarjeta-id').value = t.id;
+            document.getElementById('nueva-tarjeta-nombre').value = t.nombre;
+            document.getElementById('nueva-tarjeta-tipo').value = t.tipo;
+            document.getElementById('btn-submit-tarjeta-arcade').innerText = 'SAVE';
+        }
+
+        function eliminarTarjetaArcade(id) {
+            sfx.drop();
+            gameData.tarjetas = gameData.tarjetas.filter(t => t.id !== id);
+            actualizarListaTarjetas();
+        }
+
+        function actualizarListaTarjetas() {
+            const lista = document.getElementById('lista-tarjetas-arcade');
+            if(gameData.tarjetas.length === 0) { lista.innerHTML = '<li class="text-slate-500 text-sm">No hay tarjetas registradas.</li>'; return; }
+            lista.innerHTML = '';
+            gameData.tarjetas.forEach(t => {
+                const icon = t.tipo === 'Credito' ? 'fa-brands fa-cc-visa text-neon_pink' : 'fa-solid fa-money-check text-neon_blue';
+                const label = t.tipo === 'Credito' ? 'TDC' : 'TDD';
+                lista.innerHTML += `<li class="bg-slate-800 p-2 rounded border-l-4 border-neon_green flex items-center justify-between text-white text-sm mb-2">
+                    <div class="flex items-center truncate"><i class="${icon} mr-2 shrink-0"></i> <span class="truncate">${t.nombre}</span></div>
+                    <div class="flex items-center gap-3 shrink-0 ml-2">
+                        <span class="text-xs text-slate-300 bg-slate-700 px-2 py-0.5 rounded font-bold tracking-widest">${label}</span>
+                        <button onclick="editarTarjetaArcade(${t.id})" class="text-blue-400 hover:text-blue-300 transition" title="Editar"><i class="fa-solid fa-pen"></i></button>
+                        <button onclick="eliminarTarjetaArcade(${t.id})" class="text-red-400 hover:text-red-300 transition" title="Eliminar"><i class="fa-solid fa-trash"></i></button>
+                    </div>
+                </li>`;
+            });
+        }
+
+        function cerrarModal() { document.getElementById('modal-registro').classList.add('hidden'); document.getElementById('form-registro').reset(); }
+
+        function guardarRegistro(e) {
+            e.preventDefault();
+            const idInput = document.getElementById('reg-id').value;
+            const tipo = document.getElementById('reg-tipo').value;
+            const concepto = document.getElementById('reg-concepto').value;
+            const monto = parseFloat(document.getElementById('reg-monto').value);
+            const categoria = document.getElementById('modal-categoria').innerText;
+            const isoDate = new Date().toISOString(); 
+
+            if(tipo === 'ingreso') {
+                if(idInput) {
+                    const idx = gameData.ingresos.findIndex(i => i.id == idInput);
+                    if(idx > -1) gameData.ingresos[idx] = { ...gameData.ingresos[idx], concepto, monto, categoria };
+                } else { gameData.ingresos.push({ id: Date.now(), fecha: isoDate, concepto, monto, categoria }); }
+            } else {
+                const val = document.getElementById('reg-metodo-pago').value;
+                let metodoPago = 'Debito'; let tarjeta = null; let banco = '';
+                if(val.startsWith('tdc_')) { metodoPago = 'Credito'; tarjeta = val.replace('tdc_', ''); }
+                else if(val.startsWith('tdd_')) { metodoPago = 'Debito'; banco = val.replace('tdd_', ''); }
+
+                if(idInput) {
+                    const idx = gameData.gastos.findIndex(g => g.id == idInput);
+                    if(idx > -1) gameData.gastos[idx] = { ...gameData.gastos[idx], concepto, monto, categoria, metodoPago, tarjeta, banco };
+                } else { gameData.gastos.push({ id: Date.now(), fecha: isoDate, concepto, monto, categoria, metodoPago, tarjeta, banco }); }
+            }
+
+            sfx.cash(); 
+            cerrarModal();
+            actualizarScoreboard();
+            showCoinAnimation(tipo); // Llamar animación popup
+            
+            if(!document.getElementById('modal-dashboard').classList.contains('hidden')) abrirDashboard(); 
+        }
+        
+        // --- FUNCIONES DE DASHBOARD Y SCOREBOARD ---
+        let chartVS = null; let chartDays = null;
+
+        function abrirDashboard() {
+            document.getElementById('modal-dashboard').classList.remove('hidden');
+            const fechaStr = new Date().toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).toUpperCase();
+            document.getElementById('dashboard-fecha').innerText = `DATE: ${fechaStr}`;
+            
+            const totalIngresos = gameData.ingresos.reduce((acc, item) => acc + item.monto, 0);
+            const totalGastos = gameData.gastos.reduce((acc, item) => acc + item.monto, 0);
+
+            const ctxVS = document.getElementById('arcade-chart-vs').getContext('2d');
+            if(chartVS) chartVS.destroy();
+            Chart.defaults.color = '#9ca3af'; Chart.defaults.font.family = "'VT323', monospace"; Chart.defaults.font.size = 18;
+            chartVS = new Chart(ctxVS, { type: 'bar', data: { labels: ['SCORE MATCH'], datasets: [{ label: '1UP (IN)', data: [totalIngresos], backgroundColor: '#39ff14', borderColor: '#39ff14', borderWidth: 2 }, { label: 'DAMAGE (OUT)', data: [totalGastos], backgroundColor: '#ff00ea', borderColor: '#ff00ea', borderWidth: 2 }] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { grid: { color: '#334155' } }, x: { grid: { display: false } } } } });
+
+            const gastosPorDia = [0, 0, 0, 0, 0, 0, 0];
+            gameData.gastos.forEach(g => { if(g.fecha) gastosPorDia[new Date(g.fecha).getDay()] += g.monto; });
+
+            const ctxDays = document.getElementById('arcade-chart-days').getContext('2d');
+            if(chartDays) chartDays.destroy();
+            chartDays = new Chart(ctxDays, { type: 'line', data: { labels: ['DOM', 'LUN', 'MAR', 'MIE', 'JUE', 'VIE', 'SAB'], datasets: [{ label: 'GASTOS X DIA', data: gastosPorDia, borderColor: '#00f3ff', backgroundColor: 'rgba(0, 243, 255, 0.2)', borderWidth: 3, tension: 0.3, fill: true, pointBackgroundColor: '#fff', pointRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { grid: { color: '#334155' } }, x: { grid: { color: '#334155' } } } } });
+
+            renderListaRegistros();
+        }
+
+        function renderListaRegistros() {
+            const container = document.getElementById('lista-registros'); container.innerHTML = '';
+            const todos = [...gameData.ingresos.map(i => ({...i, esIngreso: true})), ...gameData.gastos.map(g => ({...g, esIngreso: false}))].sort((a,b) => b.id - a.id);
+            if(todos.length === 0) { container.innerHTML = '<p class="text-slate-500 text-center py-4 font-arcade text-xl">NO LOGS FOUND.</p>'; return; }
+            todos.forEach(item => {
+                const color = item.esIngreso ? 'text-neon_green' : 'text-neon_pink'; const sign = item.esIngreso ? '+' : '-'; const tipoArg = item.esIngreso ? `'ingreso'` : `'gasto'`;
+                let horaStr = item.fecha ? `${new Date(item.fecha).getHours().toString().padStart(2,'0')}:${new Date(item.fecha).getMinutes().toString().padStart(2,'0')}` : '';
+                container.innerHTML += `<div class="flex justify-between items-center bg-slate-800 p-3 mb-2 rounded border-l-4 ${item.esIngreso ? 'border-neon_green' : 'border-neon_pink'} font-sans"><div><p class="text-white font-bold text-sm uppercase">${item.concepto} <span class="text-xs text-slate-400 font-normal ml-2">${horaStr}</span></p><p class="text-xs text-slate-400">${item.categoria}</p></div><div class="flex items-center gap-4"><p class="${color} font-arcade text-2xl tracking-widest">${sign}${formateador.format(item.monto)}</p><div class="flex gap-2"><button onclick="editarRegistro(${item.id}, ${tipoArg})" class="w-8 h-8 rounded bg-slate-700 hover:bg-slate-600 text-blue-400 transition" title="Edit"><i class="fa-solid fa-pen"></i></button><button onclick="eliminarRegistro(${item.id}, ${tipoArg})" class="w-8 h-8 rounded bg-slate-700 hover:bg-slate-600 text-red-400 transition" title="Delete"><i class="fa-solid fa-trash"></i></button></div></div></div>`;
+            });
+        }
+
+        function editarRegistro(id, tipo) {
+            let item, prize;
+            if(tipo === 'ingreso') { item = gameData.ingresos.find(i => i.id === id); prize = prizes.find(p => p.type === 'ingreso'); } 
+            else { item = gameData.gastos.find(g => g.id === id); prize = prizes.find(p => p.name.toUpperCase() === item.categoria.toUpperCase()) || prizes[1]; }
+            if(!item) return;
+
+            abrirModal(prize);
+            document.getElementById('reg-id').value = item.id;
+            document.getElementById('modal-titulo-registro').innerText = 'EDITAR REGISTRO';
+            document.getElementById('reg-monto').value = item.monto;
+            
+            const selConcepto = document.getElementById('reg-concepto');
+            if(!Array.from(selConcepto.options).some(opt => opt.value === item.concepto) && item.concepto) { selConcepto.appendChild(new Option(item.concepto, item.concepto)); }
+            selConcepto.value = item.concepto;
+
+            if(tipo === 'gasto') {
+                const selMetodo = document.getElementById('reg-metodo-pago');
+                if(item.metodoPago === 'Credito') selMetodo.value = `tdc_${item.tarjeta}`;
+                else if(item.banco) selMetodo.value = `tdd_${item.banco}`;
+                else selMetodo.value = 'efectivo';
+            }
+        }
+
+        function eliminarRegistro(id, tipo) {
+            sfx.drop(); 
+            if(tipo === 'ingreso') gameData.ingresos = gameData.ingresos.filter(i => i.id !== id);
+            else gameData.gastos = gameData.gastos.filter(g => g.id !== id);
+            actualizarScoreboard(); renderListaRegistros();
+        }
+
+        function actualizarScoreboard() {
+            const totalIngresos = gameData.ingresos.reduce((acc, item) => acc + item.monto, 0);
+            const totalGastos = gameData.gastos.reduce((acc, item) => acc + item.monto, 0);
+            const gastosEfectivo = gameData.gastos.filter(g => g.metodoPago !== 'Credito').reduce((acc, item) => acc + item.monto, 0);
+            const score = totalIngresos - gastosEfectivo;
+
+            document.getElementById('score-ingresos').innerText = formateador.format(totalIngresos);
+            document.getElementById('score-gastos').innerText = formateador.format(totalGastos);
+            const scoreEl = document.getElementById('score-balance');
+            scoreEl.innerText = formateador.format(score);
+            scoreEl.className = score < 0 ? 'text-arcade_red text-5xl tracking-widest font-bold text-center text-blink' : 'text-neon_blue text-5xl tracking-widest font-bold text-center text-blink';
+        }
+
+        // Teclado para controlar la garra
+        window.addEventListener('keydown', (e) => {
+            // Verificar si hay modales abiertos o estamos en onboarding
+            if(!document.getElementById('intro-name-screen').classList.contains('hidden') || !document.getElementById('intro-home-screen').classList.contains('hidden') || !document.getElementById('modal-glosario').classList.contains('hidden') || !document.getElementById('modal-registro').classList.contains('hidden') || !document.getElementById('modal-banco').classList.contains('hidden')) return;
+
+            if(e.key === 'ArrowLeft') moveClaw(-15, 0);
+            else if(e.key === 'ArrowRight') moveClaw(15, 0);
+            else if(e.key === 'ArrowUp') moveClaw(0, -15);
+            else if(e.key === 'ArrowDown') moveClaw(0, 15);
+            else if(e.key === ' ' || e.key === 'Enter') dropClaw();
+        });
+
+        window.onload = () => { 
+            if(DEV_MODE) {
+                // --- [CHECKPOINT: SALTO RÁPIDO PARA TESTING] ---
+                document.getElementById('intro-name-screen').classList.add('hidden');
+                document.getElementById('intro-home-screen').classList.add('hidden');
+                document.getElementById('modal-glosario').classList.add('hidden');
+                playBGM();
+            } else {
+                document.getElementById('player-name').focus();
+            }
+            highlightClosest(); 
+        };
+
+        // --- REGISTRO DEL SERVICE WORKER (PWA) ---
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(registration => console.log('ServiceWorker registrado con éxito', registration.scope))
+                    .catch(error => console.log('Fallo el registro del ServiceWorker', error));
+            });
+        }
+    </script>
+</body>
+</html>
